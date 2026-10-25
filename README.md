@@ -1,3 +1,7 @@
+Cloud90 integration: see [installation, supported image and effects](CLOUD90.md)
+and [development validation](docs/cloud90-validation.md). The Cloud90 module
+runs local races with online disabled and is based on OCTR v0.6.4.
+
 <p align="center">
   <img src="docs/images/logo.png" alt="CTR Nitro-Fueled PC" width="360">
 </p>
