@@ -31,6 +31,13 @@ int main(void) {
     assert(steering==40 && accelerator==255 && buttons==0x6600);
     wchar_t temp[MAX_PATH],path[MAX_PATH];
     assert(GetTempPathW(MAX_PATH,temp));
+    swprintf(path,MAX_PATH,L"%lscloud90-output-%lu-\u00f1.log",temp,GetCurrentProcessId());
+    bridge_output=_wfopen(path,L"wb");assert(bridge_output);
+    report("CLOUD90 state 1");ack("test-1",NULL);
+    fclose(bridge_output);bridge_output=NULL;
+    FILE *output=_wfopen(path,L"rb");assert(output);
+    char received[128]={0};assert(fread(received,1,sizeof(received)-1,output)>0);fclose(output);
+    assert(!strcmp(received,"CLOUD90 state 1\nCLOUD90 ack test-1 ok\n"));assert(DeleteFileW(path));
     swprintf(path,MAX_PATH,L"%lscloud90-%lu-\u00f1.json",temp,GetCurrentProcessId());
     HANDLE file=CreateFileW(path,GENERIC_WRITE,0,NULL,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,NULL);
     assert(file!=INVALID_HANDLE_VALUE);

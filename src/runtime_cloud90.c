@@ -20,6 +20,11 @@ static int last_paused=1,key_down;
 static char seen[256][81];
 static unsigned seen_count;
 static void *last_racer;
+static FILE *bridge_output;
+static void report(const char *line) {
+    puts(line);fflush(stdout);
+    if(bridge_output) { fputs(line,bridge_output);fputc('\n',bridge_output);fflush(bridge_output); }
+}
 static int readable(const void *p,size_t n) {
     MEMORY_BASIC_INFORMATION m;
     if(!p || (uintptr_t)p<UINT64_C(0x0800000000) || (uintptr_t)p+n>UINT64_C(0x10000000000)) return 0;
@@ -56,7 +61,9 @@ static void *component(void *entity,size_t meta,size_t vtable,size_t size) {
     return is_object(p,vtable,size) ? p : NULL;
 }
 static void clear_timed(void) { invert_until=no_gas_until=no_items_until=shield_until=0; }
-static void ack(const char *id,const char *reason) { printf("CLOUD90 ack %s %s\n",id,reason ? reason : "ok");fflush(stdout); }
+static void ack(const char *id,const char *reason) {
+    char line[256];snprintf(line,sizeof line,"CLOUD90 ack %s %s",id,reason ? reason : "ok");report(line);
+}
 static int identifier(const char *s,int empty) {
     if(!*s) return empty;
     for(;*s;++s) if(!((*s>='a'&&*s<='z')||(*s>='A'&&*s<='Z')||(*s>='0'&&*s<='9')||*s=='_'||*s=='-')) return 0;
@@ -207,14 +214,14 @@ static ABI void update(void *clock) {
     original_update(clock);
     uint64_t now=GetTickCount64();
     int down=(GetAsyncKeyState(VK_F9)&0x8000)!=0;
-    if(down&&!key_down) {local_pause=!local_pause;clear_timed();printf("CLOUD90 pause %d\n",local_pause);fflush(stdout);}
+    if(down&&!key_down) {local_pause=!local_pause;clear_timed();report(local_pause ? "CLOUD90 pause 1" : "CLOUD90 pause 0");}
     key_down=down;
     void *racer=player_one(clock);
     if(racer!=last_racer){clear_timed();last_racer=racer;}
     int playing=racer!=NULL;
     if(playing!=in_play || now>=next_state) {
         in_play=playing;next_state=now+1000;
-        printf("CLOUD90 state %d\n",in_play);fflush(stdout);
+        report(in_play ? "CLOUD90 state 1" : "CLOUD90 state 0");
     }
     if(now>=next_poll) {next_poll=now+50;poll(racer,now);}
 }
@@ -233,7 +240,10 @@ void runtime_cloud90_start(void *image, size_t size) {
     }
     original_update=(void (ABI *)(void *))*slot;
     *slot=(uintptr_t)update;
-    puts("CLOUD90 bridge cloud90-ctr-1 offline");
+    const wchar_t *output_path=_wgetenv(L"CLOUD90_CTR_OUTPUT");
+    if(output_path) bridge_output=_wfopen(output_path,L"ab");
+    report("CLOUD90 bridge cloud90-ctr-1 offline");
+    report("CLOUD90 pause 0");
 }
 void runtime_cloud90_input(uint32_t *buttons, uint8_t *steering, uint8_t *accelerator) {
     if(!in_play || local_pause || !original_update)return;

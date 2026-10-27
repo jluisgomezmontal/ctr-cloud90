@@ -1,6 +1,6 @@
 # Cloud90: CTR Nitro-Fueled
 
-Módulo local para Cloud90 Game Link 1.2.0. Se basa en OCTR Windows **v0.6.4**
+Módulo local para Cloud90 Game Link 1.2.2. Se basa en OCTR Windows **v0.6.4**
 (commit `ac73258dfee67263657b0722faf2262d40bea826`). No contiene archivos del juego.
 
 ## Compatibilidad e instalación
@@ -20,7 +20,9 @@ No basta con que el nombre de la carpeta o `param.sfo` diga 1.21.
 3. Extrae `dist/CTRCloud90.zip` y ejecuta:
    `powershell -ExecutionPolicy Bypass -File install-cloud90.ps1 -PortablePath "D:\ruta\al\portable"`.
 4. En Cloud90 Game Link, pestaña CTR Nitro-Fueled, selecciona ese portable,
-   pega el token de CTR y abre el juego desde el conector.
+   pega el token de CTR y abre el cliente desde el conector. Se abre el mismo
+   `Crash™ Team Racing Nitro-Fueled.exe`; pulsa Jugar en ese cliente. Sus ajustes
+   de idioma, pantalla y controles se aplican como en el arranque habitual.
 5. Juega Arcade local, carrera normal, un jugador contra CPU. Configura y
    activa las reglas en Cloud90; los tres ejemplos iniciales empiezan apagados.
 
@@ -30,6 +32,9 @@ datos del juego y los guardados. El instalador valida las sumas y revierte una
 instalación incompleta. Rechaza sobrescribir un módulo que el usuario editó.
 La desinstalación del conector borra únicamente esos tres archivos validados.
 Las DLL del portable v0.6.4 deben estar presentes en `bin`.
+El manifiesto actualizado incluye `launcherBridgeVersion=1`. El ejecutable del
+cliente, `run.py`, `launcher.ini` y `bbport.ini` no se sustituyen ni se editan.
+El modo offline se fuerza solo en el entorno del proceso iniciado por Cloud90.
 
 ## Efectos
 
@@ -60,6 +65,11 @@ El runtime rechaza JSON inválido, sesión distinta, órdenes repetidas o vencid
 y heartbeat con más de 2 segundos. Al pausar, cambiar de carrera o perder el
 heartbeat se limpian los efectos temporales. No se acumulan regalos durante
 una desconexión. Cada `ack` comunica el resultado real de la aplicación.
+El cliente captura su propia consola. Para conservarlo, el runtime duplica las
+líneas Cloud90 a `native-output.log` en la carpeta de la sesión del conector;
+`cloud90_run.py --launcher` las reenvía al conector. Cada arranque usa una sesión
+nueva; no se reutilizan registros anteriores. Si dejan de llegar estados durante
+tres segundos, se anuncia `state 0`, incluso si el cliente sigue abierto.
 
 El hook de `CClock` ejecuta las llamadas nativas en el hilo de actualización,
 después de verificar hash y firma. No se escribe RAM desde un proceso externo.

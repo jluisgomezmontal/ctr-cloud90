@@ -26,6 +26,7 @@ def main():
     shutil.copyfile(ROOT / 'LICENSE', args.output / 'LICENSE')
     revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
     manifest = dict(bridgeVersion='cloud90-ctr-1',
+                    launcherBridgeVersion='1',
                     gameImageSha256='9952a20911931dcd0a54fe19135117d96934d17c43b7ced103a4aa7fda783c31',
                     runtimeSha256=sha(runtime), wrapperSha256=sha(args.output / 'cloud90_run.py'),
                     source='https://github.com/jluisgomezmontal/ctr-cloud90', sourceRevision=revision)
@@ -42,7 +43,7 @@ def main():
         'Cloud90 CTR module (GPL-2.0-or-later). Source: '+manifest['source']+'\n'
         'Needs OCTR v0.6.4 Windows portable and your own supported USA 1.21 dump.\n'
         'Close CTR, then run: powershell -ExecutionPolicy Bypass -File install-cloud90.ps1 -PortablePath "D:\\path\\to\\portable"\n'
-        'The original runtime, game files and saves are retained. Open via Cloud90 Game Link 1.2.0.\n',
+        'The original runtime, client, game files and saves are retained. Open via Cloud90 Game Link 1.2.2, then press Play in the original client.\n',
         encoding='utf-8')
     archive = shutil.make_archive(str(args.output), 'zip', args.output)
     print(archive)
