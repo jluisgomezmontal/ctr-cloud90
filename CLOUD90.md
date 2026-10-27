@@ -1,6 +1,6 @@
 # Cloud90: CTR Nitro-Fueled
 
-Módulo local para Cloud90 Game Link 1.2.2. Se basa en OCTR Windows **v0.6.4**
+Módulo local para Cloud90 Game Link 1.3.1. Se basa en OCTR Windows **v0.6.4**
 (commit `ac73258dfee67263657b0722faf2262d40bea826`). No contiene archivos del juego.
 
 ## Compatibilidad e instalación
@@ -56,12 +56,53 @@ No se habilitan aventura, contrarreloj, batalla, multijugador local ni online.
 F9 y «Pausar efectos» detienen los efectos. El escudo no convierte al kart en
 invulnerable frente a las armas normales del juego.
 
+## Ampliación: gravedad, aplastado, caída y caos (bridge 2)
+
+| Acción | Comportamiento implementado |
+|---|---|
+| Gravedad reducida | Factor de gravedad al 50% solo en el cuerpo físico de P1; 6 s por defecto, máximo 10 s. Clona las propiedades nativas, conserva referencias y restaura solo el cuerpo y las propiedades que todavía pertenecen al efecto. |
+| Aplastado | Ruta nativa de daño tipo 8, sin saltarse invulnerabilidad. Duración, animación y recuperación nativas; acción instantánea, sin duración configurable. |
+| Caer al vacío | Ruta nativa de caída tipo 0 y selección de punto de rescate del motor. Requiere permiso por comando y permiso vigente, con Modo sin morir apagado. Puede perder Wumpa y reservas según el juego. Espera de 180 s por defecto, mínimo 120 s incluso en pruebas. |
+| Caos | Secuencia de 8 s (máximo 10): cambia cada 2 s entre dirección invertida, bloqueo de objetos y corte de aceleración de hasta 1 s; sin repeticiones consecutivas. No incluye caída ni aplastamiento. |
+
+Los cuatro están en reglas, overlays y **Probar un efecto**. Requieren actualizar
+ambos: Game Link 1.3.1 y el paquete CTR con bridgeVersion=cloud90-ctr-2.
+Los módulos bridge 1 conservan sus efectos anteriores en el conector nuevo;
+la plataforma no les ofrece los cuatro nuevos como disponibles.
+
+F9, pausa, desconexión, rescate y cambio de carrera limpian gravedad/caos y los
+controles temporales. El escudo Cloud90 impide los cuatro efectos y limpia los
+modificadores temporales activos. F9 no deshace un golpe nativo ni una caída ya
+iniciados: el juego completa su recuperación/rescate normal. Caída queda fuera
+de la ruleta inicial y necesita habilitar **Permitir caída al vacío**, desactivar
+**Modo sin morir** y guardar los cambios. El permiso no afecta peligros normales.
+
+Cada carrera/rescate emite un contexto nuevo. Los comandos conservan ese contexto
+entre backend, conector e inbox; se rechazan los de la carrera anterior.
+El runtime anuncia sus capacidades y mantiene el modo offline y P1 contra CPU.
+
+### Evidencia y estado de validación
+
+La implementación se basó en análisis estático de la imagen compatible local:
+CKartDamageComponent y CKartRespawnComponent, el estado nativo de aplastamiento,
+el llamador automático de caída y la clonación nativa de propiedades físicas.
+Las llamadas no se eligieron a partir de nombres de metadatos solamente.
+
+Las pruebas del motor simulado comprueban clonación/restauración y referencias,
+respeto a propiedades cambiadas por el juego, protecciones de daño/rescate,
+permisos de caída, límites de duración y secuencia de caos. El módulo completo
+compila. **Estos cuatro efectos todavía no tienen confirmación dentro del juego;
+el propietario pidió probarlos después del despliegue en producción.**
+Pendiente: salto/aterrizaje en dos pistas, recuperación visual de aplastamiento,
+caída y rescate con vueltas/checkpoints intactos, inmunidades, F9/pausa en carrera
+y duración efectiva de las fases de caos. Un ACK nativo no sustituye esa prueba.
+
 ## Transporte y límites
 
 Se mantiene el protocolo WebSocket de Cloud90 (`hello`, `welcome`, `state`,
 `effect`, `ack`). El conector escribe un JSON de hasta 20 órdenes, sesión
 aleatoria por arranque, expiración de 10 segundos y heartbeat monotónico.
-El runtime rechaza JSON inválido, sesión distinta, órdenes repetidas o vencidas,
+El runtime rechaza JSON inválido, sesión o contexto distintos, órdenes repetidas o vencidas,
 y heartbeat con más de 2 segundos. Al pausar, cambiar de carrera o perder el
 heartbeat se limpian los efectos temporales. No se acumulan regalos durante
 una desconexión. Cada `ack` comunica el resultado real de la aplicación.
@@ -107,6 +148,8 @@ En MSYS2 CLANG64:
 mkdir -p out
 clang -std=c11 -Wall -Wextra -Werror -I. -Isrc tests/test_cloud90_runtime.c -o out/cloud90-runtime-test.exe
 out/cloud90-runtime-test.exe
+clang -std=c11 -Wall -Wextra -Werror -I. -Isrc tests/test_cloud90_troll.c -o out/cloud90-troll-test.exe
+out/cloud90-troll-test.exe
 clang -std=c11 -Wall -Wextra -Werror tests/test_cloud90_json.c -o out/cloud90-json-test.exe
 out/cloud90-json-test.exe
 python tests/test_cloud90_launcher.py

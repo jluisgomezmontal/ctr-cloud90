@@ -20,6 +20,8 @@ jobs:
           mkdir -p out
           clang -std=c11 -Wall -Wextra -Werror -I. -Isrc tests/test_cloud90_runtime.c -o out/cloud90-runtime-test.exe
           out/cloud90-runtime-test.exe
+          clang -std=c11 -Wall -Wextra -Werror -I. -Isrc tests/test_cloud90_troll.c -o out/cloud90-troll-test.exe
+          out/cloud90-troll-test.exe
           clang -std=c11 -Wall -Wextra -Werror tests/test_cloud90_json.c -o out/cloud90-json-test.exe
           out/cloud90-json-test.exe
           python tests/test_cloud90_launcher.py

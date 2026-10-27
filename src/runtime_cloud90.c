@@ -52,15 +52,20 @@ static void *handle(void *h) {
     }
     return NULL;
 }
+#ifndef C90_CALL
+#define C90_CALL(offset,type) ((type)(guest+(offset)))
+#endif
 static void *component(void *entity,size_t meta,size_t vtable,size_t size) {
     if(!readable(entity,0x100)) return NULL;
     void *m=ptr(guest,meta);
     if(!readable(m,0x60)) return NULL;
     typedef void *(ABI *Get)(void *,void *,int);
-    void *p=((Get)(guest+0x3dbf90))(entity,m,0);
+    void *p=C90_CALL(0x3dbf90,Get)(entity,m,0);
     return is_object(p,vtable,size) ? p : NULL;
 }
-static void clear_timed(void) { invert_until=no_gas_until=no_items_until=shield_until=0; }
+static void restore_gravity(void);
+static void clear_troll(void);
+static void clear_timed(void) { invert_until=no_gas_until=no_items_until=shield_until=0; clear_troll(); }
 static void ack(const char *id,const char *reason) {
     char line[256];snprintf(line,sizeof line,"CLOUD90 ack %s %s",id,reason ? reason : "ok");report(line);
 }
@@ -90,12 +95,17 @@ static void *player_one(void *clock) {
         void *p=handle(ptr(r,0x10));
         if(readable(p,0xf8) && number(p,0xb4)==0 && read_byte(r,0x8c)==0 && read_byte(r,0xc0)==0 && number(r,0x4c)>=0) one=r;
     }
-    return humans==1 ? one : NULL;
+    if(humans!=1 || !one)return NULL;
+    void *kart=handle(ptr(one,0x20));
+    void *respawn=component(kart,0x2ac5948,0x2589460,0x90);
+    return respawn && number(respawn,0x5c)==0 ? one : NULL;
 }
-static const char *apply(void *racer,const char *effect,const char *arg,unsigned ms,uint64_t now) {
-    int troll=!strcmp(effect,"wumpa_remove")||!strcmp(effect,"remove_item")||!strcmp(effect,"invert_steering")||!strcmp(effect,"no_accelerate")||!strcmp(effect,"no_items");
+#include "cloud90_troll.h"
+static void clear_troll(void) { chaos_until=0;restore_gravity(); }
+static const char *apply(void *racer,const char *effect,const char *arg,unsigned ms,uint64_t now,int authorized) {
+    int troll=!strcmp(effect,"low_gravity")||!strcmp(effect,"squash")||!strcmp(effect,"fall_void")||!strcmp(effect,"chaos")||!strcmp(effect,"wumpa_remove")||!strcmp(effect,"remove_item")||!strcmp(effect,"invert_steering")||!strcmp(effect,"no_accelerate")||!strcmp(effect,"no_items");
     if(troll && now<shield_until) return "escudo activo";
-    if(!strcmp(effect,"shield")) {shield_until=now+(ms<30000?ms:30000);return NULL;}
+    if(!strcmp(effect,"shield")) {invert_until=no_gas_until=no_items_until=0;clear_troll();shield_until=now+(ms<30000?ms:30000);return NULL;}
     if(!strcmp(effect,"invert_steering")) {invert_until=now+(ms<10000?ms:10000);return NULL;}
     if(!strcmp(effect,"no_accelerate")) {no_gas_until=now+(ms<3000?ms:3000);return NULL;}
     if(!strcmp(effect,"no_items")) {no_items_until=now+(ms<10000?ms:10000);return NULL;}
@@ -115,6 +125,7 @@ static const char *apply(void *racer,const char *effect,const char *arg,unsigned
         return number(racer,0x9c)==target ? NULL : "el juego rechazo Wumpa";
     }
     void *kart=handle(ptr(racer,0x20));
+    if(!strcmp(effect,"low_gravity")||!strcmp(effect,"squash")||!strcmp(effect,"fall_void")||!strcmp(effect,"chaos"))return apply_troll(kart,effect,arg,ms,now,authorized);
     if(!strcmp(effect,"boost_now")) {
         void *boost=component(kart,0x2ac4018,0x2589190,0x90);
         typedef void *(ABI *Factory)(void);
@@ -186,6 +197,10 @@ static void poll(void *racer,uint64_t now) {
        !c90_number(&j,c90_field(&j,0,"heartbeatMs"),&heartbeat) ||
        heartbeat>now || now-heartbeat>2000 ||
        !c90_bool(&j,c90_field(&j,0,"paused"),&paused)) {clear_timed();return;}
+    int no_death=1,allow=0;
+    int nd=c90_field(&j,0,"noDeath"),ad=c90_field(&j,0,"allowDestructive");
+    if((nd>=0&&!c90_bool(&j,nd,&no_death)) || (ad>=0&&!c90_bool(&j,ad,&allow))) {clear_timed();return;}
+    live_no_death=no_death;live_destructive=allow;
     last_heartbeat=heartbeat;
     if(last_paused && !paused) local_pause=0;
     last_paused=paused;
@@ -201,13 +216,18 @@ static void poll(void *racer,uint64_t now) {
            !c90_string(&j,c90_field(&j,t,"arg"),arg,sizeof arg) || !identifier(arg,1) ||
            !c90_number(&j,c90_field(&j,t,"ms"),&ms) || ms>120000 ||
            !c90_number(&j,c90_field(&j,t,"expiresMs"),&expires))continue;
+        int safe=1,allow_command=0;
+        int permission=c90_field(&j,t,"allowDestructive");
+        if(!c90_bool(&j,c90_field(&j,t,"safe"),&safe) || (permission>=0&&!c90_bool(&j,permission,&allow_command)))continue;
+        int epoch_ok=c90_equal(&j,c90_field(&j,t,"epoch"),race_epoch);
         int duplicate=0;for(unsigned k=0;k<256;++k)if(!strcmp(seen[k],id)){duplicate=1;break;}
         if(duplicate)continue;
         strcpy(seen[seen_count++%256],id);
         if(expires<now || expires-now>10000)ack(id,"efecto vencido");
         else if(paused||local_pause)ack(id,"en pausa");
         else if(!racer)ack(id,"no disponible ahora");
-        else ack(id,apply(racer,effect,arg,(unsigned)ms,now));
+        else if(!epoch_ok)ack(id,"carrera anterior o cliente desactualizado");
+        else ack(id,apply(racer,effect,arg,(unsigned)ms,now,!safe&&allow_command));
     }
 }
 static ABI void update(void *clock) {
@@ -217,7 +237,14 @@ static ABI void update(void *clock) {
     if(down&&!key_down) {local_pause=!local_pause;clear_timed();report(local_pause ? "CLOUD90 pause 1" : "CLOUD90 pause 0");}
     key_down=down;
     void *racer=player_one(clock);
-    if(racer!=last_racer){clear_timed();last_racer=racer;}
+    if(racer!=last_racer){clear_timed();last_racer=racer;snprintf(race_epoch,sizeof race_epoch,"%s-%u",session,++race_generation);char context[128];snprintf(context,sizeof context,"CLOUD90 context %s",race_epoch);report(context);}
+    if(!racer || local_pause || !last_heartbeat || now-last_heartbeat>2000)clear_timed();
+    else {
+        void *kart=handle(ptr(racer,0x20));
+        void *respawn=component(kart,0x2ac5948,0x2589460,0x90);
+        if(!respawn || number(respawn,0x5c)!=0)clear_timed();
+        else tick_troll(now);
+    }
     int playing=racer!=NULL;
     if(playing!=in_play || now>=next_state) {
         in_play=playing;next_state=now+1000;
@@ -242,15 +269,17 @@ void runtime_cloud90_start(void *image, size_t size) {
     *slot=(uintptr_t)update;
     const wchar_t *output_path=_wgetenv(L"CLOUD90_CTR_OUTPUT");
     if(output_path) bridge_output=_wfopen(output_path,L"ab");
-    report("CLOUD90 bridge cloud90-ctr-1 offline");
+    report("CLOUD90 bridge cloud90-ctr-2 offline");
+    report("CLOUD90 capabilities wumpa_add,wumpa_full,wumpa_remove,give_item,remove_item,boost_now,invert_steering,no_accelerate,no_items,shield,low_gravity,squash,fall_void,chaos");
     report("CLOUD90 pause 0");
 }
 void runtime_cloud90_input(uint32_t *buttons, uint8_t *steering, uint8_t *accelerator) {
     if(!in_play || local_pause || !original_update)return;
     uint64_t now=GetTickCount64();
-    if(now<invert_until)*steering=(uint8_t)(255-*steering);
-    if(now<no_gas_until) {*buttons&=~(UINT32_C(0x4000)|UINT32_C(0x200));*accelerator=0;}
-    if(now<no_items_until)*buttons&=~(UINT32_C(0x2000)|UINT32_C(0x400));
+    int chaotic=now<chaos_until&&now<chaos_phase_until;
+    if(now<invert_until || (chaotic&&chaos_phase==0))*steering=(uint8_t)(255-*steering);
+    if(now<no_gas_until || (chaotic&&chaos_phase==2)) {*buttons&=~(UINT32_C(0x4000)|UINT32_C(0x200));*accelerator=0;}
+    if(now<no_items_until || (chaotic&&chaos_phase==1))*buttons&=~(UINT32_C(0x2000)|UINT32_C(0x400));
 }
 #else
 void runtime_cloud90_start(void *image,size_t size) { (void)image; (void)size; }
