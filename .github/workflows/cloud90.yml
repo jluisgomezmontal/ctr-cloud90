@@ -1,0 +1,30 @@
+name: Cloud90 offline bridge
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v6
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: CLANG64
+          install: mingw-w64-clang-x86_64-toolchain mingw-w64-clang-x86_64-python
+      - name: Bounded parser, memory guards, input cleanup and isolated launcher
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          clang -std=c11 -Wall -Wextra -Werror -I. -Isrc tests/test_cloud90_runtime.c -o out/cloud90-runtime-test.exe
+          out/cloud90-runtime-test.exe
+          clang -std=c11 -Wall -Wextra -Werror -I. -Isrc tests/test_cloud90_troll.c -o out/cloud90-troll-test.exe
+          out/cloud90-troll-test.exe
+          clang -std=c11 -Wall -Wextra -Werror tests/test_cloud90_json.c -o out/cloud90-json-test.exe
+          out/cloud90-json-test.exe
+          python tests/test_cloud90_launcher.py
+      - name: Side-by-side installer
+        shell: powershell
+        run: tests/test_cloud90_install.ps1

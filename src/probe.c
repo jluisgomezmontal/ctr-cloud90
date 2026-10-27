@@ -7,6 +7,7 @@
 #include <inttypes.h>
 #include <cpuid.h>
 #include "runtime.h"
+#include "runtime_cloud90.h"
 #include "gpu/bbgpu.h"
 #include "isa_rewrite.h"
 #if !defined(__x86_64__) || !defined(__GNUC__)
@@ -1222,6 +1223,7 @@ int main(int argc, char **argv) {
             if (result) fail("module initializer failed");
         }
     }
+    runtime_cloud90_start(image, size);
     runtime_cinematic_start(image);
     runtime_frontend_start(image);
     printf("Entering original x86-64 code at guest offset 0x%" PRIx64 "\n", entry);

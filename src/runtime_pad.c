@@ -21,6 +21,7 @@
  * measurement. SacredFire keeps one calibration per controller port (split screen). */
 #define _GNU_SOURCE
 #include "runtime.h"
+#include "runtime_cloud90.h"
 #include "gpu/bbgpu.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -1058,6 +1059,7 @@ static ABI int32_t pad_read_state(int32_t handle, PadData *data) {
     if (!data) return ERR_INVALID_ARG;
     pthread_mutex_lock(&read_lock);
     if (handle==PAD_HANDLE) sample(data); else sample_port(data,handle-1);
+    if (handle==PAD_HANDLE) runtime_cloud90_input(&data->buttons,&data->left_x,&data->r2);
     ++reads; if (!pad_started_us) pad_started_us=now_us();
     pthread_mutex_unlock(&read_lock);
     return 0;
