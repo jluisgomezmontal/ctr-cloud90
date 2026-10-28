@@ -7,10 +7,11 @@ static void *test_native(size_t offset);
 #include <assert.h>
 static unsigned char *physics,*world,*bodies,*original,*copy,*damage,*respawn,*kart;
 static void *current;
-static int hits,falls,releases,protected;
+static int hits,falls,releases,protected,derived_physics;
 static ABI void *get_component(void *entity,void *meta,int flags) {
     assert(entity==kart && flags==0);
-    if(meta==physics)return physics;
+    if(meta==physics && !derived_physics)return physics;
+    if(meta==physics+0x90 && derived_physics)return physics;
     if(meta==damage)return damage;
     if(meta==respawn)return respawn;
     return NULL;
@@ -42,6 +43,7 @@ int main(void) {
     *(void **)(world+0x20)=bodies;*(unsigned *)(world+0x2c)=4;bodies[0x90+0x40]=1;
     *(unsigned *)(original+8)=1;*(float *)(original+0x18)=1;current=original;
     *(void **)(guest+0x2acfc10)=physics;*(void **)(guest+0x2ac5018)=damage;*(void **)(guest+0x2ac5948)=respawn;
+    *(void **)(guest+0x2ab10e0)=physics+0x90;
     *(void **)damage=guest+0x2587410;*(int *)(damage+0x40)=-1;*(void **)(damage+0xb0)=original;
     *(void **)respawn=guest+0x2589460;
     assert(start_gravity(kart,6000,1000)==NULL);
@@ -51,6 +53,18 @@ int main(void) {
     assert(*(unsigned *)(physics+8)==1 && *(unsigned *)(original+8)==1 && *(unsigned *)(copy+8)==0 && releases==3);
     assert(start_gravity(kart,6000,8000)==NULL);clear_timed();assert(current==original);
     assert(start_gravity(kart,6000,9000)==NULL);current=original;clear_timed();assert(current==original);
+    /* Actual local kart: derived behavior shape, no base component result. */
+    derived_physics=1;*(void **)physics=guest+0x258fc38;
+    assert(start_gravity(kart,6000,10000)==NULL);
+    assert(current==copy && *(float *)(copy+0x18)==0.5f);
+    tick_troll(16000);assert(current==original&&!gravity_physics);
+    assert(*(unsigned *)(physics+8)==1 && *(unsigned *)(original+8)==1);
+    *(void **)physics=guest+0x258fc40;
+    assert(start_gravity(kart,6000,17000)!=NULL && current==original);
+    *(void **)physics=guest+0x258fc38;
+    bodies[0x90+0x40]=0;
+    assert(start_gravity(kart,6000,17000)!=NULL && current==original);
+    bodies[0x90+0x40]=1;
     assert(apply_troll(kart,"chaos","",8000,10000,0)==NULL);
     assert(apply_troll(kart,"chaos","",8000,10001,0)!=NULL);
     unsigned last=chaos_phase;
