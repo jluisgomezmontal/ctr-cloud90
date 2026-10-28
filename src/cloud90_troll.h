@@ -16,7 +16,10 @@ static int writable(void *p,size_t n) {
     return (m.Protect&(PAGE_READWRITE|PAGE_WRITECOPY|PAGE_EXECUTE_READWRITE|PAGE_EXECUTE_WRITECOPY))!=0;
 }
 static int body_valid(void *physics) {
-    if(!is_object(physics,0x2589f00,0x60))return 0;
+    /* Player karts use CBehaviorPhysicsGenericShapeComponent, a derived
+     * CPhysicsComponent with the same native body at +0x40. Checking only
+     * the base vtable rejects the actual kart before reading its body. */
+    if(!is_object(physics,0x2589f00,0x60) && !is_object(physics,0x258fc38,0x88))return 0;
     uint32_t id=(uint32_t)number(physics,0x40);
     void *world=ptr(physics,0x48),*bodies=ptr(world,0x20);
     uint32_t count=(uint32_t)number(world,0x2c)&UINT32_C(0x3fffffff);
@@ -35,7 +38,8 @@ static void restore_gravity(void) {
 static const char *start_gravity(void *kart,unsigned ms,uint64_t now) {
     if(gravity_until>now)return "gravedad ya activa";
     restore_gravity();
-    void *physics=component(kart,0x2acfc10,0x2589f00,0x60);
+    void *physics=component(kart,0x2ab10e0,0x258fc38,0x88);
+    if(!physics)physics=component(kart,0x2acfc10,0x2589f00,0x60);
     if(!body_valid(physics) || !writable(physics,0x60))return "fisica no disponible";
     void *original=motion_properties(physics),*copy=NULL;
     if(!writable(original,0x40))return "gravedad no disponible";
