@@ -22,6 +22,24 @@ try {
     function Get-Process { $null }
     & $ctrInstall -PortablePath $ctrPortable
     & $ctrInstall -PortablePath $ctrPortable
+    # The ZIP is sometimes extracted directly into an existing portable.
+    Copy-Item -LiteralPath $ctrInstall,(Join-Path $ctrPackage 'sacredfire-cloud90.exe'),(Join-Path $ctrPackage 'cloud90_run.py'),(Join-Path $ctrPackage 'cloud90-ctr.json') -Destination $ctrPortable
+    & (Join-Path $ctrPortable 'install-cloud90.ps1') -PortablePath $ctrPortable
+    [IO.File]::WriteAllText((Join-Path $ctrPortable 'cloud90_run.py'),'updated package wrapper')
+    $ctrUpdated=Get-Content -Raw (Join-Path $ctrPortable 'cloud90-ctr.json') | ConvertFrom-Json
+    $ctrUpdated.wrapperSha256=(Get-FileHash (Join-Path $ctrPortable 'cloud90_run.py')).Hash.ToLowerInvariant()
+    $ctrUpdated | ConvertTo-Json | Set-Content (Join-Path $ctrPortable 'cloud90-ctr.json')
+    & (Join-Path $ctrPortable 'install-cloud90.ps1') -PortablePath $ctrPortable
+    if ([IO.File]::ReadAllText((Join-Path $ctrPortable 'cloud90_run.py')) -ne 'updated package wrapper') { throw 'Validated in-place wrapper update failed' }
+    # Fresh installation from the portable must also recognize the validated
+    # wrapper as package input, rather than an unknown installed module.
+    $ctrFresh = Join-Path $ctrWork 'fresh-portable'
+    New-Item -ItemType Directory -Force (Join-Path $ctrFresh 'bin') | Out-Null
+    [IO.File]::WriteAllText((Join-Path $ctrFresh 'run.py'),'fresh launcher')
+    [IO.File]::WriteAllText((Join-Path $ctrFresh 'bin/sacredfire.exe'),'fresh runtime')
+    Copy-Item -LiteralPath $ctrInstall,(Join-Path $ctrPackage 'sacredfire-cloud90.exe'),(Join-Path $ctrPackage 'cloud90_run.py'),(Join-Path $ctrPackage 'cloud90-ctr.json') -Destination $ctrFresh
+    & (Join-Path $ctrFresh 'install-cloud90.ps1') -PortablePath $ctrFresh
+    if ([IO.File]::ReadAllText((Join-Path $ctrFresh 'bin/sacredfire-cloud90.exe')) -ne 'test runtime') { throw 'Fresh in-place install failed' }
     [IO.File]::WriteAllText((Join-Path $ctrPortable 'cloud90_run.py'),'user edit')
     $ctrRefused = $false
     try { & $ctrInstall -PortablePath $ctrPortable } catch { $ctrRefused = $true }

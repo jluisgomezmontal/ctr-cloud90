@@ -13,11 +13,23 @@ if ((Get-FileHash -LiteralPath (Join-Path $PSScriptRoot 'cloud90_run.py') -Algor
 $ctrManifest=Join-Path $ctrPortable 'bin\cloud90-ctr.json'
 $ctrRuntime=Join-Path $ctrPortable 'bin\sacredfire-cloud90.exe'
 $ctrWrapper=Join-Path $ctrPortable 'cloud90_run.py'
+function Test-CtrSamePath([string]$Source,[string]$Destination) {
+    return [string]::Equals([IO.Path]::GetFullPath($Source),[IO.Path]::GetFullPath($Destination),[StringComparison]::OrdinalIgnoreCase)
+}
+function Copy-CtrPackageFile([string]$Source,[string]$Destination) {
+    if (-not (Test-CtrSamePath $Source $Destination)) {
+        Copy-Item -LiteralPath $Source -Destination $Destination -Force
+    }
+}
+$ctrWrapperIsPackage=Test-CtrSamePath (Join-Path $PSScriptRoot 'cloud90_run.py') $ctrWrapper
 # Refuse to overwrite files belonging to a different package or a user edit.
-if ((Test-Path -LiteralPath $ctrRuntime) -or (Test-Path -LiteralPath $ctrWrapper)) {
+if ((Test-Path -LiteralPath $ctrRuntime) -or ((Test-Path -LiteralPath $ctrWrapper) -and -not $ctrWrapperIsPackage)) {
     if (-not (Test-Path -LiteralPath $ctrManifest)) { throw 'Hay archivos Cloud90 sin manifiesto; consérvalos antes de instalar.' }
     $ctrOld=Get-Content -LiteralPath $ctrManifest -Raw | ConvertFrom-Json
     foreach ($ctrPair in @(@($ctrRuntime,$ctrOld.runtimeSha256),@($ctrWrapper,$ctrOld.wrapperSha256))) {
+        # When extracted into the portable, this is the already validated
+        # package wrapper. The installer neither copies nor changes that file.
+        if ($ctrWrapperIsPackage -and (Test-CtrSamePath $ctrPair[0] $ctrWrapper)) { continue }
         if (-not (Test-Path -LiteralPath $ctrPair[0]) -or (Get-FileHash -LiteralPath $ctrPair[0] -Algorithm SHA256).Hash.ToLowerInvariant() -ne $ctrPair[1]) {
             throw 'El módulo instalado cambió; no se sobrescribirá automáticamente.'
         }
@@ -28,9 +40,9 @@ foreach ($ctrDestination in @($ctrRuntime,$ctrWrapper,$ctrManifest)) {
     if (Test-Path -LiteralPath $ctrDestination) { $ctrBackup[$ctrDestination]=[IO.File]::ReadAllBytes($ctrDestination) }
 }
 try {
-    Copy-Item -LiteralPath $ctrSource -Destination $ctrRuntime -Force
-    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'cloud90_run.py') -Destination $ctrWrapper -Force
-    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'cloud90-ctr.json') -Destination $ctrManifest -Force
+    Copy-CtrPackageFile $ctrSource $ctrRuntime
+    Copy-CtrPackageFile (Join-Path $PSScriptRoot 'cloud90_run.py') $ctrWrapper
+    Copy-CtrPackageFile (Join-Path $PSScriptRoot 'cloud90-ctr.json') $ctrManifest
 } catch {
     foreach ($ctrDestination in @($ctrRuntime,$ctrWrapper,$ctrManifest)) {
         if ($ctrBackup.ContainsKey($ctrDestination)) { [IO.File]::WriteAllBytes($ctrDestination,$ctrBackup[$ctrDestination]) }
